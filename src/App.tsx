@@ -6,7 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 declare global { interface Window { firebase: any } }
 
 type Shift = 'Frühschicht' | 'Mittelschicht' | 'Spätschicht';
-type View = 'overview' | 'new' | 'tickets' | 'analytics' | 'accounts';
+type View = 'overview' | 'new' | 'tickets' | 'handover' | 'analytics' | 'accounts';
 type Role = 'admin' | 'technician';
 type Profile = { id: string; name: string; email: string; role: Role; active: boolean };
 type AuthUser = { uid: string; email: string | null };
@@ -139,6 +139,7 @@ export default function Home() {
         {view === 'overview' && <Overview tickets={current} now={now} shift={shift} config={config} go={setView} />}
         {view === 'new' && <TicketForm shift={shift} config={config} onSaved={() => setView('overview')} />}
         {view === 'tickets' && <Tickets tickets={tickets} now={now} />}
+        {view === 'handover' && <Handover tickets={tickets} now={now} />}
         {view === 'analytics' && <Analytics tickets={tickets} now={now} />}
         {view === 'accounts' && profile.role === 'admin' && <Accounts currentUid={profile.id} />}
       </div>
@@ -186,7 +187,7 @@ function ShiftSelect({ profile, shift, setShift, config, start, logout }: { prof
 }
 
 function Sidebar({ view, setView, admin }: { view: View; setView: (view: View) => void; admin: boolean }) {
-  const items: [View, string, string][] = [['overview', '⌂', 'Übersicht'], ['new', '＋', 'Neue Störung'], ['tickets', '≡', 'Alle Störungen'], ['analytics', '▥', 'Auswertungen']];
+  const items: [View, string, string][] = [['overview', '⌂', 'Übersicht'], ['new', '＋', 'Neue Störung'], ['tickets', '≡', 'Alle Störungen'], ['handover', '⇄', 'Schichtübergabe'], ['analytics', '▥', 'Auswertungen']];
   if (admin) items.push(['accounts', '⚙', 'Konten']);
   return <aside><Logo /><nav>{items.map(([item, icon, name]) => <button key={item} className={view === item ? 'active' : ''} onClick={() => setView(item)}>{icon}<span>{name}</span></button>)}</nav><div className="asideBottom"><Powered /></div></aside>;
 }
@@ -229,6 +230,32 @@ function Tickets({ tickets, now }: { tickets: Ticket[]; now: Date }) {
   const [shift, setShift] = useState<'all' | Shift>('all');
   const filtered = tickets.filter(ticket => ticket.dateKey === date && (shift === 'all' || ticket.shift === shift));
   return <><div className="heading"><PageTitle title="Alle Störungen" subtitle="Nach Datum und Schicht im Archiv suchen." /><div className="archiveFilters"><input type="date" value={date} onChange={e => setDate(e.target.value)} /><select value={shift} onChange={e => setShift(e.target.value as 'all' | Shift)}><option value="all">Alle Schichten</option>{shifts.map(item => <option key={item.name}>{item.name}</option>)}</select></div></div><Panel title="Störungsliste" subtitle={`${filtered.length} Meldungen am ${formatDateKey(date)}`} wide>{filtered.length ? <TicketTable tickets={filtered} /> : <Empty text="Für diese Auswahl sind keine Störungen gespeichert." />}</Panel></>;
+}
+
+
+function Handover({ tickets, now }: { tickets: Ticket[]; now: Date }) {
+  const [date, setDate] = useState(zurichDateKey(now));
+  const dayTickets = tickets.filter(ticket => ticket.dateKey === date);
+  const byShift = (name: Shift) => dayTickets.filter(ticket => ticket.shift === name);
+  return <><div className="heading"><PageTitle title="Schichtübergabe" subtitle="Vollständiger Tagesbericht für alle drei Schichten." /><div className="archiveFilters"><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div></div>
+    <div className="metrics">
+      <Metric icon="∑" title="Gesamt" value={String(dayTickets.length)} note="Alle Störungen des Tages" />
+      {shifts.map(item => <Metric key={item.name} icon={item.icon} title={item.name} value={String(byShift(item.name).length)} note="Meldungen dieser Schicht" />)}
+    </div>
+    <div className="grid">
+      <Panel title="Gesamt nach Störungsart" subtitle={`${dayTickets.length} Meldungen am ${formatDateKey(date)}`}><Bars data={countBy(dayTickets, 'category')} empty="Für diesen Tag sind keine Störungen gespeichert." /></Panel>
+      <Panel title="Übergabeübersicht" subtitle="Automatisch aus allen Meldungen erstellt">
+        <Line a="Datum" b={formatDateKey(date)} />
+        <Line a="Gesamtstörungen" b={String(dayTickets.length)} />
+        <Line a="Mit Adresse" b={String(dayTickets.filter(ticket => ticket.address.trim()).length)} />
+        <Line a="Ohne Adresse" b={String(dayTickets.filter(ticket => !ticket.address.trim()).length)} />
+      </Panel>
+    </div>
+    {shifts.map(item => {
+      const shiftTickets = byShift(item.name);
+      return <Panel key={item.name} title={item.name} subtitle={`${shiftTickets.length} Störungen · alle Meldungen dieser Schicht`} wide>{shiftTickets.length ? <TicketTable tickets={shiftTickets} /> : <Empty text={`Für die ${item.name} sind keine Störungen gespeichert.`} />}</Panel>;
+    })}
+  </>;
 }
 
 function Analytics({ tickets, now }: { tickets: Ticket[]; now: Date }) {
