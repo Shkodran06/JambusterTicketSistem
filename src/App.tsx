@@ -116,7 +116,9 @@ export default function Home() {
     if (!profile) { setConfig(null); return; }
     return firebaseDb().collection('config').doc('app').onSnapshot((snapshot: any) => {
       if (!snapshot.exists) { setAuthError('Die geschützte JTS-Konfiguration fehlt.'); return; }
-      setConfig(snapshot.data() as RuntimeConfig);
+      const data = snapshot.data();
+      const runtime = typeof data?.payload === 'string' ? JSON.parse(data.payload) : data;
+      setConfig(runtime as RuntimeConfig);
     }, (error: Error) => setAuthError(error.message));
   }, [profile]);
 
