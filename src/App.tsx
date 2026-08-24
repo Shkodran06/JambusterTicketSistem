@@ -53,6 +53,8 @@ const shifts: { name: Shift; icon: string }[] = [
   { name: 'Spätschicht', icon: '☾' },
 ];
 
+const allowedAreas = ['Halle A – Sektor C', 'Halle A – Sektor D'] as const;
+
 const reasonOptions = [
   'Verdrehten Behälter aufgrund zu hohen Gewichts geradegerichtet.',
   'Verdrehten Behälter aufgrund einer Anlagenstörung geradegerichtet',
@@ -154,7 +156,7 @@ export default function Home() {
         {view === 'overview' && <Overview tickets={current} now={now} shift={shift} config={config} go={setView} />}
         {view === 'new' && <TicketForm shift={shift} config={config} onSaved={() => setView('overview')} />}
         {view === 'tickets' && <Tickets tickets={tickets} now={now} />}
-        {view === 'handover' && <Handover tickets={tickets} now={now} />}
+        {view === 'handover' && <Handover tickets={tickets} now={now} shift={shift} />}
         {view === 'analytics' && <Analytics tickets={tickets} now={now} />}
         {view === 'accounts' && profile.role === 'admin' && <Accounts currentUid={profile.id} />}
       </div>
@@ -220,7 +222,7 @@ function Overview({ tickets, now, shift, config, go }: { tickets: Ticket[]; now:
 function TicketForm({ shift, config, onSaved }: { shift: Shift; config: RuntimeConfig; onSaved: () => void }) {
   const [category, setCategory] = useState(config.categories[0] ?? '');
   const [address, setAddress] = useState('');
-  const [area, setArea] = useState(config.areas[0] ?? '');
+  const [area, setArea] = useState<string>(allowedAreas[0]);
   const [reason, setReason] = useState(reasonOptions[0]);
   const [description, setDescription] = useState('');
   const [technician, setTechnician] = useState('Kein Techniker');
@@ -237,7 +239,7 @@ function TicketForm({ shift, config, onSaved }: { shift: Shift; config: RuntimeC
       onSaved();
     } catch (failure) { setError(errorMessage(failure)); setBusy(false); }
   };
-  return <><PageTitle title="Neue Störung" subtitle={`${shift} · Datum und Uhrzeit werden automatisch gespeichert.`} /><form className="dataForm panel" onSubmit={submit}><label>Bereich / Halle<select value={area} onChange={e => setArea(e.target.value)}>{config.areas.map(value => <option key={value}>{value}</option>)}</select></label><label>Art der Störung<select value={category} onChange={e => { setCategory(e.target.value); setAddress(''); }}>{config.categories.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Anlagenpunkt / Adresse <span>Optional – nur Einträge mit Adresse erscheinen bei „Auffällige Anlagenpunkte“.</span>{category === 'Notaus' ? <select value={address} onChange={e => setAddress(e.target.value)}><option value="">Keine genaue Angabe</option>{config.notaus.map(value => <option key={value}>{value}</option>)}</select> : <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Zum Beispiel Linie 4, AP 12 oder Anlagennummer" />}</label><label className="wide">Grund der Störung <span>Grund aus der Liste auswählen.</span><select value={reason} onChange={e => setReason(e.target.value)} required>{reasonOptions.map(value => <option key={value}>{value}</option>)}</select></label><label>Techniker <span>Wird nur als Auswahl in der Meldung verwendet.</span><select value={technician} onChange={e => setTechnician(e.target.value)}><option>Kein Techniker</option>{config.technicians.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Beschreibung <span>Optional – kann leer gelassen werden.</span><textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Störung bei Bedarf kurz beschreiben" /></label>{error && <Notice tone="error">{error}</Notice>}<footer><button type="button" className="secondary" onClick={onSaved}>Abbrechen</button><button className="primary" disabled={busy}>{busy ? 'Speichern…' : 'Störung speichern'}</button></footer></form></>;
+  return <><PageTitle title="Neue Störung" subtitle={`${shift} · Datum und Uhrzeit werden automatisch gespeichert.`} /><form className="dataForm panel" onSubmit={submit}><label>Bereich / Halle<select value={area} onChange={e => setArea(e.target.value)}>{allowedAreas.map(value => <option key={value}>{value}</option>)}</select></label><label>Art der Störung<select value={category} onChange={e => { setCategory(e.target.value); setAddress(''); }}>{config.categories.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Anlagenpunkt / Adresse <span>Optional – nur Einträge mit Adresse erscheinen bei „Auffällige Anlagenpunkte“.</span>{category === 'Notaus' ? <select value={address} onChange={e => setAddress(e.target.value)}><option value="">Keine genaue Angabe</option>{config.notaus.map(value => <option key={value}>{value}</option>)}</select> : <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Zum Beispiel Linie 4, AP 12 oder Anlagennummer" />}</label><label className="wide">Grund der Störung <span>Grund aus der Liste auswählen.</span><select value={reason} onChange={e => setReason(e.target.value)} required>{reasonOptions.map(value => <option key={value}>{value}</option>)}</select></label><label>Techniker <span>Wird nur als Auswahl in der Meldung verwendet.</span><select value={technician} onChange={e => setTechnician(e.target.value)}><option>Kein Techniker</option>{config.technicians.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Beschreibung <span>Optional – kann leer gelassen werden.</span><textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Störung bei Bedarf kurz beschreiben" /></label>{error && <Notice tone="error">{error}</Notice>}<footer><button type="button" className="secondary" onClick={onSaved}>Abbrechen</button><button className="primary" disabled={busy}>{busy ? 'Speichern…' : 'Störung speichern'}</button></footer></form></>;
 }
 
 function Tickets({ tickets, now }: { tickets: Ticket[]; now: Date }) {
@@ -248,17 +250,28 @@ function Tickets({ tickets, now }: { tickets: Ticket[]; now: Date }) {
 }
 
 
-function Handover({ tickets, now }: { tickets: Ticket[]; now: Date }) {
+function Handover({ tickets, now, shift }: { tickets: Ticket[]; now: Date; shift: Shift }) {
   const [date, setDate] = useState(zurichDateKey(now));
   const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
   const [generatedMessage, setGeneratedMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const dayTickets = tickets.filter(ticket => ticket.dateKey === date);
   const byShift = (name: Shift) => dayTickets.filter(ticket => ticket.shift === name);
+  const selectedShiftTickets = byShift(shift);
   const createMessage = () => {
-    const counts = Object.entries(countBy(dayTickets, 'category')).sort((a, b) => b[1] - a[1]);
-    const technicians = [...new Set(dayTickets.map(ticket => ticket.technician).filter(name => name && name !== 'Kein Techniker'))];
-    const lines = ['Hoi zämme:', ...(counts.length ? counts.map(([name, count]) => `${name}: ${count}`) : ['Keine Störungen gemeldet.'])];
+    const counts = Object.entries(countBy(selectedShiftTickets, 'category')).sort((a, b) => b[1] - a[1]);
+    const technicians = [...new Set(selectedShiftTickets.map(ticket => ticket.technician).filter(name => name && name !== 'Kein Techniker'))];
+    const lines = [
+      'Hoi zämme:',
+      '',
+      `Datum: ${formatDateKey(date)}`,
+      `Schicht: ${shift}`,
+      '',
+      'Störungen:',
+      ...(counts.length ? counts.map(([name, count]) => `${name}: ${count}`) : ['Keine Störungen gemeldet.']),
+      '',
+      `Gesamt: ${selectedShiftTickets.length}`,
+    ];
     if (technicians.length) lines.push('', `Techniker: ${technicians.join(', ')}`, 'Danke euch für eure Zeit.');
     setGeneratedMessage(lines.join('\n'));
     setGeneratedAt(new Date());
