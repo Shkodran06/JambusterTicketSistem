@@ -250,22 +250,43 @@ function Tickets({ tickets, now }: { tickets: Ticket[]; now: Date }) {
 
 function Handover({ tickets, now }: { tickets: Ticket[]; now: Date }) {
   const [date, setDate] = useState(zurichDateKey(now));
-  const [generatedAt, setGeneratedAt] = useState(() => new Date());
+  const [generatedAt, setGeneratedAt] = useState<Date | null>(null);
+  const [generatedMessage, setGeneratedMessage] = useState('');
+  const [copied, setCopied] = useState(false);
   const dayTickets = tickets.filter(ticket => ticket.dateKey === date);
   const byShift = (name: Shift) => dayTickets.filter(ticket => ticket.shift === name);
-  return <><div className="heading"><PageTitle title="Schichtübergabe" subtitle="Vollständiger Tagesbericht für alle drei Schichten." /><div className="archiveFilters"><input type="date" value={date} onChange={e => setDate(e.target.value)} /><button className="primary" onClick={() => setGeneratedAt(new Date())}>Bericht neu erstellen</button></div></div>
+  const createMessage = () => {
+    const counts = Object.entries(countBy(dayTickets, 'category')).sort((a, b) => b[1] - a[1]);
+    const technicians = [...new Set(dayTickets.map(ticket => ticket.technician).filter(name => name && name !== 'Kein Techniker'))];
+    const lines = ['Hoi zämme:', ...(counts.length ? counts.map(([name, count]) => `${name}: ${count}`) : ['Keine Störungen gemeldet.'])];
+    if (technicians.length) lines.push('', `Techniker: ${technicians.join(', ')}`, 'Danke euch für eure Zeit.');
+    setGeneratedMessage(lines.join('\n'));
+    setGeneratedAt(new Date());
+    setCopied(false);
+  };
+  const copyMessage = async () => {
+    if (!generatedMessage) return;
+    await navigator.clipboard.writeText(generatedMessage);
+    setCopied(true);
+  };
+  const changeDate = (value: string) => {
+    setDate(value);
+    setGeneratedAt(null);
+    setGeneratedMessage('');
+    setCopied(false);
+  };
+  return <><div className="heading"><PageTitle title="Schichtübergabe" subtitle="Vollständiger Tagesbericht für alle drei Schichten." /><div className="archiveFilters"><input type="date" value={date} onChange={e => changeDate(e.target.value)} /></div></div>
     <div className="metrics">
       <Metric icon="∑" title="Gesamt" value={String(dayTickets.length)} note="Alle Störungen des Tages" />
       {shifts.map(item => <Metric key={item.name} icon={item.icon} title={item.name} value={String(byShift(item.name).length)} note="Meldungen dieser Schicht" />)}
     </div>
     <div className="grid">
       <Panel title="Gesamt nach Störungsart" subtitle={`${dayTickets.length} Meldungen am ${formatDateKey(date)}`}><Bars data={countBy(dayTickets, 'category')} empty="Für diesen Tag sind keine Störungen gespeichert." /></Panel>
-      <Panel title="Übergabeübersicht" subtitle="Automatisch aus allen Meldungen erstellt">
-        <Line a="Datum" b={formatDateKey(date)} />
-        <Line a="Erstellt um" b={`${clock(generatedAt)} Uhr`} />
-        <Line a="Gesamtstörungen" b={String(dayTickets.length)} />
-        <Line a="Mit Adresse" b={String(dayTickets.filter(ticket => ticket.address.trim()).length)} />
-        <Line a="Ohne Adresse" b={String(dayTickets.filter(ticket => !ticket.address.trim()).length)} />
+      <Panel title="Übergabe-Nachricht" subtitle={generatedAt ? `Erstellt um ${clock(generatedAt)} Uhr` : 'Jederzeit automatisch erstellen'}>
+        <div className="handoverGenerator">
+          <button className="primary" onClick={createMessage}>Nachricht erstellen</button>
+          {generatedMessage && <><textarea value={generatedMessage} readOnly aria-label="Übergabe-Nachricht" /><button className="secondary" onClick={copyMessage}>{copied ? 'Kopiert ✓' : 'Nachricht kopieren'}</button></>}
+        </div>
       </Panel>
     </div>
     {shifts.map(item => {
