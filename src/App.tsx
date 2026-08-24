@@ -18,6 +18,7 @@ type Ticket = {
   area: string;
   category: string;
   address: string;
+  reason?: string;
   description: string;
   technician: string;
 };
@@ -204,6 +205,7 @@ function TicketForm({ shift, config, onSaved }: { shift: Shift; config: RuntimeC
   const [category, setCategory] = useState(config.categories[0] ?? '');
   const [address, setAddress] = useState('');
   const [area, setArea] = useState(config.areas[0] ?? '');
+  const [reason, setReason] = useState('');
   const [description, setDescription] = useState('');
   const [technician, setTechnician] = useState('Kein Techniker');
   const [busy, setBusy] = useState(false);
@@ -213,13 +215,13 @@ function TicketForm({ shift, config, onSaved }: { shift: Shift; config: RuntimeC
     try {
       await firebaseDb().collection('tickets').add({
         shift, dateKey: zurichDateKey(new Date()), area, category,
-        address: address.trim(), description: description.trim(), technician,
+        address: address.trim(), reason: reason.trim(), description: description.trim(), technician,
         createdAt: firebase().firestore.FieldValue.serverTimestamp(),
       });
       onSaved();
     } catch (failure) { setError(errorMessage(failure)); setBusy(false); }
   };
-  return <><PageTitle title="Neue Störung" subtitle={`${shift} · Datum und Uhrzeit werden automatisch gespeichert.`} /><form className="dataForm panel" onSubmit={submit}><label>Bereich / Halle<select value={area} onChange={e => setArea(e.target.value)}>{config.areas.map(value => <option key={value}>{value}</option>)}</select></label><label>Art der Störung<select value={category} onChange={e => { setCategory(e.target.value); setAddress(''); }}>{config.categories.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Anlagenpunkt / Adresse <span>Optional – nur Einträge mit Adresse erscheinen bei „Auffällige Anlagenpunkte“.</span>{category === 'Notaus' ? <select value={address} onChange={e => setAddress(e.target.value)}><option value="">Keine genaue Angabe</option>{config.notaus.map(value => <option key={value}>{value}</option>)}</select> : <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Zum Beispiel Linie 4, AP 12 oder Anlagennummer" />}</label><label>Techniker <span>Wird nur als Auswahl in der Meldung verwendet.</span><select value={technician} onChange={e => setTechnician(e.target.value)}><option>Kein Techniker</option>{config.technicians.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Beschreibung<textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Störung kurz und sachlich beschreiben" required /></label>{error && <Notice tone="error">{error}</Notice>}<footer><button type="button" className="secondary" onClick={onSaved}>Abbrechen</button><button className="primary" disabled={busy}>{busy ? 'Speichern…' : 'Störung speichern'}</button></footer></form></>;
+  return <><PageTitle title="Neue Störung" subtitle={`${shift} · Datum und Uhrzeit werden automatisch gespeichert.`} /><form className="dataForm panel" onSubmit={submit}><label>Bereich / Halle<select value={area} onChange={e => setArea(e.target.value)}>{config.areas.map(value => <option key={value}>{value}</option>)}</select></label><label>Art der Störung<select value={category} onChange={e => { setCategory(e.target.value); setAddress(''); }}>{config.categories.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Anlagenpunkt / Adresse <span>Optional – nur Einträge mit Adresse erscheinen bei „Auffällige Anlagenpunkte“.</span>{category === 'Notaus' ? <select value={address} onChange={e => setAddress(e.target.value)}><option value="">Keine genaue Angabe</option>{config.notaus.map(value => <option key={value}>{value}</option>)}</select> : <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Zum Beispiel Linie 4, AP 12 oder Anlagennummer" />}</label><label className="wide">Grund der Störung <span>Was hat die Störung ausgelöst?</span><input value={reason} onChange={e => setReason(e.target.value)} placeholder="Zum Beispiel Materialstau, Sensor blockiert oder mechanischer Fehler" required /></label><label>Techniker <span>Wird nur als Auswahl in der Meldung verwendet.</span><select value={technician} onChange={e => setTechnician(e.target.value)}><option>Kein Techniker</option>{config.technicians.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Beschreibung<textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Störung kurz und sachlich beschreiben" required /></label>{error && <Notice tone="error">{error}</Notice>}<footer><button type="button" className="secondary" onClick={onSaved}>Abbrechen</button><button className="primary" disabled={busy}>{busy ? 'Speichern…' : 'Störung speichern'}</button></footer></form></>;
 }
 
 function Tickets({ tickets, now }: { tickets: Ticket[]; now: Date }) {
@@ -275,7 +277,7 @@ function Line({ a, b }: { a: string; b: string }) { return <div className="line"
 function Empty({ text }: { text: string }) { return <div className="empty"><span>◇</span><p>{text}</p></div>; }
 function Notice({ children, tone }: { children: React.ReactNode; tone: 'error' | 'success' }) { return <p className={`notice ${tone}`}>{children}</p>; }
 function Bars({ data, empty }: { data: Record<string, number>; empty: string }) { const entries = Object.entries(data).sort((a, b) => b[1] - a[1]); const max = Math.max(...entries.map(item => item[1]), 1); return entries.length ? <div className="categories">{entries.map(([name, count], index) => <div key={name}><span><i className={`c${index % 4}`} />{name}</span><b><i className={`c${index % 4}`} style={{ width: `${(count / max) * 100}%` }} /></b><strong>{count}</strong></div>)}</div> : <Empty text={empty} />; }
-function TicketTable({ tickets }: { tickets: Ticket[] }) { return <div className="tableWrap"><table><thead><tr><th>Zeit</th><th>Schicht</th><th>Kategorie</th><th>Adresse</th><th>Beschreibung</th><th>Techniker</th></tr></thead><tbody>{tickets.map(ticket => <tr key={ticket.id}><td>{clock(new Date(ticket.createdAt))}</td><td>{ticket.shift}</td><td><b>{ticket.category}</b></td><td>{ticket.address ? <strong className="address">⌖ {ticket.address}</strong> : '—'}</td><td>{ticket.description}</td><td>{ticket.technician}</td></tr>)}</tbody></table></div>; }
+function TicketTable({ tickets }: { tickets: Ticket[] }) { return <div className="tableWrap"><table><thead><tr><th>Zeit</th><th>Schicht</th><th>Kategorie</th><th>Adresse</th><th>Grund</th><th>Beschreibung</th><th>Techniker</th></tr></thead><tbody>{tickets.map(ticket => <tr key={ticket.id}><td>{clock(new Date(ticket.createdAt))}</td><td>{ticket.shift}</td><td><b>{ticket.category}</b></td><td>{ticket.address ? <strong className="address">⌖ {ticket.address}</strong> : '—'}</td><td>{ticket.reason || '—'}</td><td>{ticket.description}</td><td>{ticket.technician}</td></tr>)}</tbody></table></div>; }
 function countBy(list: Ticket[], key: 'category' | 'address') { return list.reduce<Record<string, number>>((result, ticket) => { const value = ticket[key]; if (!value) return result; result[value] = (result[value] || 0) + 1; return result; }, {}); }
 function repeatedAddresses(list: Ticket[]) { return Object.entries(countBy(list, 'address')).filter(item => item[1] > 1); }
 function zurichDateKey(date: Date) { const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date); const value = Object.fromEntries(parts.map(part => [part.type, part.value])); return `${value.year}-${value.month}-${value.day}`; }
