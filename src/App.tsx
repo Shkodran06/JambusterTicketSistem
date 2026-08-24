@@ -206,7 +206,7 @@ function TicketForm({ shift, config, onSaved }: { shift: Shift; config: RuntimeC
   const [category, setCategory] = useState(config.categories[0] ?? '');
   const [address, setAddress] = useState('');
   const [area, setArea] = useState(config.areas[0] ?? '');
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(config.categories[0] ?? '');
   const [description, setDescription] = useState('');
   const [technician, setTechnician] = useState('Kein Techniker');
   const [busy, setBusy] = useState(false);
@@ -222,7 +222,7 @@ function TicketForm({ shift, config, onSaved }: { shift: Shift; config: RuntimeC
       onSaved();
     } catch (failure) { setError(errorMessage(failure)); setBusy(false); }
   };
-  return <><PageTitle title="Neue Störung" subtitle={`${shift} · Datum und Uhrzeit werden automatisch gespeichert.`} /><form className="dataForm panel" onSubmit={submit}><label>Bereich / Halle<select value={area} onChange={e => setArea(e.target.value)}>{config.areas.map(value => <option key={value}>{value}</option>)}</select></label><label>Art der Störung<select value={category} onChange={e => { setCategory(e.target.value); setAddress(''); }}>{config.categories.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Anlagenpunkt / Adresse <span>Optional – nur Einträge mit Adresse erscheinen bei „Auffällige Anlagenpunkte“.</span>{category === 'Notaus' ? <select value={address} onChange={e => setAddress(e.target.value)}><option value="">Keine genaue Angabe</option>{config.notaus.map(value => <option key={value}>{value}</option>)}</select> : <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Zum Beispiel Linie 4, AP 12 oder Anlagennummer" />}</label><label className="wide">Grund der Störung <span>Was hat die Störung ausgelöst?</span><input value={reason} onChange={e => setReason(e.target.value)} placeholder="Zum Beispiel Materialstau, Sensor blockiert oder mechanischer Fehler" required /></label><label>Techniker <span>Wird nur als Auswahl in der Meldung verwendet.</span><select value={technician} onChange={e => setTechnician(e.target.value)}><option>Kein Techniker</option>{config.technicians.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Beschreibung<textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Störung kurz und sachlich beschreiben" required /></label>{error && <Notice tone="error">{error}</Notice>}<footer><button type="button" className="secondary" onClick={onSaved}>Abbrechen</button><button className="primary" disabled={busy}>{busy ? 'Speichern…' : 'Störung speichern'}</button></footer></form></>;
+  return <><PageTitle title="Neue Störung" subtitle={`${shift} · Datum und Uhrzeit werden automatisch gespeichert.`} /><form className="dataForm panel" onSubmit={submit}><label>Bereich / Halle<select value={area} onChange={e => setArea(e.target.value)}>{config.areas.map(value => <option key={value}>{value}</option>)}</select></label><label>Art der Störung<select value={category} onChange={e => { setCategory(e.target.value); setAddress(''); }}>{config.categories.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Anlagenpunkt / Adresse <span>Optional – nur Einträge mit Adresse erscheinen bei „Auffällige Anlagenpunkte“.</span>{category === 'Notaus' ? <select value={address} onChange={e => setAddress(e.target.value)}><option value="">Keine genaue Angabe</option>{config.notaus.map(value => <option key={value}>{value}</option>)}</select> : <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Zum Beispiel Linie 4, AP 12 oder Anlagennummer" />}</label><label className="wide">Grund der Störung <span>Grund aus der Liste auswählen.</span><select value={reason} onChange={e => setReason(e.target.value)} required>{config.categories.map(value => <option key={value}>{value}</option>)}</select></label><label>Techniker <span>Wird nur als Auswahl in der Meldung verwendet.</span><select value={technician} onChange={e => setTechnician(e.target.value)}><option>Kein Techniker</option>{config.technicians.map(value => <option key={value}>{value}</option>)}</select></label><label className="wide">Beschreibung<textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Störung kurz und sachlich beschreiben" required /></label>{error && <Notice tone="error">{error}</Notice>}<footer><button type="button" className="secondary" onClick={onSaved}>Abbrechen</button><button className="primary" disabled={busy}>{busy ? 'Speichern…' : 'Störung speichern'}</button></footer></form></>;
 }
 
 function Tickets({ tickets, now }: { tickets: Ticket[]; now: Date }) {
@@ -235,9 +235,10 @@ function Tickets({ tickets, now }: { tickets: Ticket[]; now: Date }) {
 
 function Handover({ tickets, now }: { tickets: Ticket[]; now: Date }) {
   const [date, setDate] = useState(zurichDateKey(now));
+  const [generatedAt, setGeneratedAt] = useState(() => new Date());
   const dayTickets = tickets.filter(ticket => ticket.dateKey === date);
   const byShift = (name: Shift) => dayTickets.filter(ticket => ticket.shift === name);
-  return <><div className="heading"><PageTitle title="Schichtübergabe" subtitle="Vollständiger Tagesbericht für alle drei Schichten." /><div className="archiveFilters"><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div></div>
+  return <><div className="heading"><PageTitle title="Schichtübergabe" subtitle="Vollständiger Tagesbericht für alle drei Schichten." /><div className="archiveFilters"><input type="date" value={date} onChange={e => setDate(e.target.value)} /><button className="primary" onClick={() => setGeneratedAt(new Date())}>Bericht neu erstellen</button></div></div>
     <div className="metrics">
       <Metric icon="∑" title="Gesamt" value={String(dayTickets.length)} note="Alle Störungen des Tages" />
       {shifts.map(item => <Metric key={item.name} icon={item.icon} title={item.name} value={String(byShift(item.name).length)} note="Meldungen dieser Schicht" />)}
@@ -246,6 +247,7 @@ function Handover({ tickets, now }: { tickets: Ticket[]; now: Date }) {
       <Panel title="Gesamt nach Störungsart" subtitle={`${dayTickets.length} Meldungen am ${formatDateKey(date)}`}><Bars data={countBy(dayTickets, 'category')} empty="Für diesen Tag sind keine Störungen gespeichert." /></Panel>
       <Panel title="Übergabeübersicht" subtitle="Automatisch aus allen Meldungen erstellt">
         <Line a="Datum" b={formatDateKey(date)} />
+        <Line a="Erstellt um" b={`${clock(generatedAt)} Uhr`} />
         <Line a="Gesamtstörungen" b={String(dayTickets.length)} />
         <Line a="Mit Adresse" b={String(dayTickets.filter(ticket => ticket.address.trim()).length)} />
         <Line a="Ohne Adresse" b={String(dayTickets.filter(ticket => !ticket.address.trim()).length)} />
